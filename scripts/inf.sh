@@ -12,7 +12,7 @@ audioset_train_weight=AudioSet/balanced_weight.csv
 audioset_eval_json=AudioSet/eval.json
 
 # For reverberation data, please visit https://huggingface.co/datasets/zhisheng01/SpatialSounds/blob/main/mp3d_reverb.zip
-reverb_type=$1 # or mono
+reverb_type="quad"
 reverb_path_root=mp3d_reverb # https://github.com/zszheng147/Spatial-AST/tree/main?tab=readme-ov-file#reverberation
 reverb_train_json=mp3d_reverb/train_reverberation.json
 reverb_val_json=mp3d_reverb/eval_reverberation.json
