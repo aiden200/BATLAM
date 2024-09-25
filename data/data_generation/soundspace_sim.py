@@ -4,13 +4,15 @@ import os
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+import soundfile as sf
+
 from PIL import Image
 from rlr_audio_propagation import Config, Context, ChannelLayout, ChannelLayoutType
 
 class SoundspaceSimulator:
     def __init__(self, glb_file, dest_path, mic_pos=None, sources_pos=[], audio_fmts=["mic"]):
         self.glb_file = glb_file
-        self.dest_path = Path(dest_path)
+        self.dest_path = dest_path
         self.audio_fmts = audio_fmts
         
         self.source_spheres = []
@@ -19,10 +21,12 @@ class SoundspaceSimulator:
         self.adjusted_source_positions = []
         self.scene = trimesh.Scene()
 
-        self.cfg = self.initialize_config()
-        self.ctx = self.initialize_context(self.cfg)
-
         self.mesh = self.load_and_repair_mesh(self.glb_file)
+        
+        self.cfg = self.initialize_config()
+        
+        self.initialize_context(self.cfg)
+
         if mic_pos is None:
             self.mic_center = self.find_microphone_position()
         else:
@@ -37,18 +41,25 @@ class SoundspaceSimulator:
         return Config()
 
     def initialize_context(self, config):
-        return Context(config)
+        self.ctx = Context(config)
+        self.ctx.add_object()
+        self.ctx.add_mesh_vertices(self.mesh.vertices.flatten().tolist())
+        self.ctx.add_mesh_indices(self.mesh.faces.flatten().tolist(), 3, "default")
+        self.ctx.finalize_object_mesh(0)
 
     def load_and_repair_mesh(self, glb_file):
         mesh = trimesh.load(glb_file, force='mesh')
         vertices = mesh.vertices.copy()
         faces = mesh.faces.copy()
         new_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        broken_faces = trimesh.repair.broken_faces(new_mesh)
         trimesh.repair.fix_inversion(new_mesh)
         trimesh.repair.fix_normals(new_mesh)
         trimesh.repair.fix_winding(new_mesh)
         new_mesh.fill_holes()
         new_mesh.visual.face_colors = np.ones((len(new_mesh.faces), 4)) * 255
+        new_mesh.visual.face_colors[broken_faces] = [255, 0, 0, 255] # make fixed walls red
+        self.scene.add_geometry(new_mesh)
         return new_mesh
 
     def find_microphone_position(self, min_avg_ray_length=3.0, max_attempts=100):
@@ -183,7 +194,6 @@ class SoundspaceSimulator:
                 for listener_index, mic_pos in enumerate(self.mic_absolute_positions):
                     ir_sample_count = self.ctx.get_ir_sample_count(listener_index, source_index)
                     ir_channel_count = self.ctx.get_ir_channel_count(listener_index, source_index)
-                    print("ir_channel_count", ir_channel_count)
                     ir = np.zeros((ir_channel_count, ir_sample_count))
                     for i in range(ir_channel_count):
                         channel = np.array(self.ctx.get_ir_channel(listener_index, source_index, i))
@@ -216,10 +226,8 @@ class SoundspaceSimulator:
                 else:
                     padded_IRs.append(ir[:, :max_length])
             
-#             filepath = dest_path_sofa / f"soundspaces_{fmt}_{os.path.splitext(self.glb_file.name)[0]}.npy"
             rirs = np.array(padded_IRs)
-#             np.save('filepath.npy', rirs)
-            
-        print("SOFA file has been created.")
-        print(f"Final IR array shape: {rirs.shape}")
+            # uncomment to write RIR as wav
+            #sf.write(self.dest_path.replace(".npy", ".wav"), rirs[0].T, sr)
+            np.save(self.dest_path, rirs)
 
