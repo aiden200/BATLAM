@@ -170,7 +170,7 @@ def get_args_parser():
     parser.add_argument('--load_imgnet_pt', action='store_true', default=False, help='when img_pt_ckpt, if load_imgnet_pt, use img_pt_ckpt to initialize audio branch, if not, keep audio branch random')
     
     parser.add_argument('--reverb_path_root', type=str, default='/path/to/reverberation', help='reverb folder path')
-    parser.add_argument('--reverb_type', type=str, default='binaural', choices=['binaural', 'mono'], help='reverb type')
+    parser.add_argument('--reverb_type', type=str, default='binaural', choices=['binaural', 'mono', 'quad'], help='reverb type')
     parser.add_argument('--reverb_train_json', type=str, default='/path/to/reverberation.json', help='reverb train json')
     parser.add_argument('--reverb_val_json', type=str, default='/path/to/reverberation.json', help='reverb val json')
 
@@ -337,8 +337,19 @@ def main(args):
     #if args.finetune and not args.eval:
     if args.finetune:
         checkpoint = torch.load(args.finetune, map_location='cpu')
+        # Reshape the BatchNorm running_mean and running_var from [2] to [4]
+        checkpoint['model']['bn.running_mean'] = torch.cat([checkpoint['model']['bn.running_mean'], torch.zeros(2)])
+        checkpoint['model']['bn.running_var'] = torch.cat([checkpoint['model']['bn.running_var'], torch.zeros(2)])
+
         print("Load pre-trained checkpoint from: %s" % args.finetune)
         checkpoint_model = checkpoint['model']
+
+        # Removing conv down layers
+        keys_to_remove = [key for key in checkpoint_model.keys() if 'conv_downsample' in key ]
+        for key in keys_to_remove:
+            del checkpoint_model[key]
+
+            
         state_dict = model.state_dict()
 
         if not args.eval:
