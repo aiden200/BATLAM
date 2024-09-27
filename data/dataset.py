@@ -203,6 +203,7 @@ class MultichannelDataset(Dataset):
         spaital_targets = self.fetch_spatial_targets(reverb_item)
         reverb_path = os.path.join(self.reverb_path_root, self.reverb_type, reverb_item['fname'])
         reverb = torch.from_numpy(np.load(reverb_path)).float()
+        reverb = signal.resample_poly(reverb, 32000, 44100) # [asroman] - hardcoding as the RIRs I extracted are sr=44100
 
         reverb_padding = 32000 * 2 - reverb.shape[1]
         if reverb_padding > 0:
