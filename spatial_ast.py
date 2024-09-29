@@ -94,7 +94,7 @@ class SpatialAST(_VisionTransformer):
 
         # Changed this to sample down to 4 channels
         self.conv_downsample = nn.Sequential(
-            conv3x3(8, 1), 
+            conv3x3(16, 1), 
             nn.BatchNorm2d(1),
             nn.GELU(),
         )
@@ -171,6 +171,7 @@ class SpatialAST(_VisionTransformer):
 
         return x
 
+    
     # overwrite original timm
     # need to edit this
     def forward(self, waveforms, reverbs, mask_t_prob=0.0, mask_f_prob=0.0):
@@ -178,19 +179,21 @@ class SpatialAST(_VisionTransformer):
         B, C, T = waveforms.shape
 
         waveforms = waveforms.reshape(B * C, T)
+        
         real, imag = self.spectrogram_extractor(waveforms) 
 
         log_mel = self.logmel_extractor(torch.sqrt(real**2 + imag**2)).reshape(B, C, -1, 128)
         log_mel = self.bn(log_mel)
         
-        # IPD = torch.atan2(imag[1::2], real[1::2]) - torch.atan2(imag[::2], real[::2])
         # Compute IPD between channel pairs (1 vs 2, and 3 vs 4)
-        IPD_12 = torch.atan2(imag[1::4], real[1::4]) - torch.atan2(imag[::4], real[::4])
-        IPD_34 = torch.atan2(imag[3::4], real[3::4]) - torch.atan2(imag[2::4], real[2::4])
-
+        IPD_12 = torch.atan2(imag[1::4], real[1::4]) - torch.atan2(imag[0::4], real[0::4])  # mic 1 vs mic 2
+        IPD_13 = torch.atan2(imag[2::4], real[2::4]) - torch.atan2(imag[0::4], real[0::4])  # mic 1 vs mic 3
+        IPD_14 = torch.atan2(imag[3::4], real[3::4]) - torch.atan2(imag[0::4], real[0::4])  # mic 1 vs mic 4
+        IPD_23 = torch.atan2(imag[2::4], real[2::4]) - torch.atan2(imag[1::4], real[1::4])  # mic 2 vs mic 3
+        IPD_24 = torch.atan2(imag[3::4], real[3::4]) - torch.atan2(imag[1::4], real[1::4])  # mic 2 vs mic 4
+        IPD_34 = torch.atan2(imag[3::4], real[3::4]) - torch.atan2(imag[2::4], real[2::4])  # mic 3 vs mic 4
         # Concatenate the IPD results along the channel dimension
-        IPD = torch.cat([IPD_12, IPD_34], dim=1)
-
+        IPD = torch.cat([IPD_12, IPD_13, IPD_14, IPD_23, IPD_24, IPD_34], dim=1)
         x = torch.cat([log_mel, torch.matmul(torch.cat([torch.cos(IPD), torch.sin(IPD)], dim=1), self.logmel_extractor.melW)], dim=1)
         # x = log_mel
 

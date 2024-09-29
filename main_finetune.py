@@ -170,7 +170,7 @@ def get_args_parser():
     parser.add_argument('--load_imgnet_pt', action='store_true', default=False, help='when img_pt_ckpt, if load_imgnet_pt, use img_pt_ckpt to initialize audio branch, if not, keep audio branch random')
     
     parser.add_argument('--reverb_path_root', type=str, default='/path/to/reverberation', help='reverb folder path')
-    parser.add_argument('--reverb_type', type=str, default='binaural', choices=['binaural', 'mono', 'quad'], help='reverb type')
+    parser.add_argument('--reverb_type', type=str, default='binaural', choices=['binaural', 'mono', 'tetra'], help='reverb type')
     parser.add_argument('--reverb_train_json', type=str, default='/path/to/reverberation.json', help='reverb train json')
     parser.add_argument('--reverb_val_json', type=str, default='/path/to/reverberation.json', help='reverb val json')
 
