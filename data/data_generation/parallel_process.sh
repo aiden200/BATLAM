@@ -2,7 +2,7 @@
 
 # Set base directory and number of parallel processes (N)
 BASE_DIR="/scratch/ssd1/audio_datasets/SpatialSounds/mp3d_reverb/binaural"
-N=18
+N=18 # set to the number of cores for max efficiency
 
 # Get the list of subdirectories and split into N segments
 SUBDIRS=($(ls -d $BASE_DIR/*/))
