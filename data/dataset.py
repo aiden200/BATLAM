@@ -133,7 +133,7 @@ class MultichannelDataset(Dataset):
         self.reverb_path_root = reverb_path_root
         self.reverb = json.load(open(reverb_json, 'r'))['data']
         self.reverb_type = reverb_type
-        self.channel_num = 2 if reverb_type == 'binaural' else 9 if reverb_type == 'ambisonics' else 4 if reverb_type == "quad" else 1
+        self.channel_num = 2 if reverb_type == 'binaural' else 9 if reverb_type == 'ambisonics' else 4 if reverb_type == "tetra" else 1
         
         self.audio_conf = audio_conf
         print('---------------the {:s} dataloader---------------'.format(self.audio_conf.get('mode')))
@@ -202,9 +202,8 @@ class MultichannelDataset(Dataset):
         reverb_item = random.choice(self.reverb)
         spaital_targets = self.fetch_spatial_targets(reverb_item)
         reverb_path = os.path.join(self.reverb_path_root, self.reverb_type, reverb_item['fname'])
-        reverb = torch.from_numpy(np.load(reverb_path)).float()
-        reverb = signal.resample_poly(reverb, 32000, 44100) # [asroman] - hardcoding as the RIRs I extracted are sr=44100
-
+        reverb = torch.from_numpy(np.load(reverb_path)).float()[0]
+        reverb = torch.from_numpy(signal.resample_poly(reverb.T, 32000, 44100)).T # [asroman] - hardcoding as the RIRs I extracted are sr=44100
         reverb_padding = 32000 * 2 - reverb.shape[1]
         if reverb_padding > 0:
             reverb = F.pad(reverb, (0, reverb_padding), 'constant', 0)
