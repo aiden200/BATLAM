@@ -24,6 +24,7 @@ class SoundspaceSimulator:
         self.mesh = self.load_and_repair_mesh(self.glb_file)
         
         self.cfg = self.initialize_config()
+        self.cfg.sample_rate = 32000
         
         self.initialize_context(self.cfg)
 
