@@ -133,7 +133,7 @@ class MultichannelDataset(Dataset):
         self.reverb_path_root = reverb_path_root
         self.reverb = json.load(open(reverb_json, 'r'))['data']
         self.reverb_type = reverb_type
-        self.channel_num = 2 if reverb_type == 'binaural' else 9 if reverb_type == 'ambisonics' else 4 if reverb_type == "tetra_final" else 1
+        self.channel_num = 2 if reverb_type == 'binaural' else 9 if reverb_type == 'ambisonics' else 4 if reverb_type == "tetra" else 1
         
         self.audio_conf = audio_conf
         print('---------------the {:s} dataloader---------------'.format(self.audio_conf.get('mode')))
