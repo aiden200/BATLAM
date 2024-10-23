@@ -58,17 +58,26 @@ def train_one_epoch(
         distance = spaital_targets['distance'].long().to(device, non_blocking=True)
         azimuth = spaital_targets['azimuth'].long().to(device, non_blocking=True)
         elevation = spaital_targets['elevation'].long().to(device, non_blocking=True)
-
+        
         # with torch.cuda.amp.autocast():
         outputs = model(waveforms, reverbs, mask_t_prob=args.mask_t_prob, mask_f_prob=args.mask_f_prob)
         
-        loss1 = criterion(outputs[0], targets)
-        loss2 = F.cross_entropy(outputs[1], distance)
-        loss3 = F.cross_entropy(outputs[2], azimuth)
-        loss4 = F.cross_entropy(outputs[3], elevation)
+        outputs_1 = outputs[1].view(-1, 21, 2)
+        outputs_2 = outputs[2].view(-1, 360, 2)
+        outputs_3 = outputs[3].view(-1, 180, 2)
         
+        loss1 = criterion(outputs[0], targets)
+        loss_d1 = F.cross_entropy(outputs_1[..., 0], distance[:, 0])
+        loss_a1 = F.cross_entropy(outputs_2[..., 0], azimuth[:, 0])
+        loss_e1 = F.cross_entropy(outputs_3[..., 0], elevation[:, 0])
+        
+        loss_d2 = F.cross_entropy(outputs_1[..., 1], distance[:, 1])
+        loss_a2 = F.cross_entropy(outputs_2[..., 1], azimuth[:, 1])
+        loss_e2 = F.cross_entropy(outputs_3[..., 1], elevation[:, 1])
+
+
         # loss = loss1
-        loss = 1250 * loss1 + 1 * loss2 + 2 * (loss3 + loss4)
+        loss = 1250 * loss1 + 1 * (loss_d1 + loss_d2) + 2 * ((loss_a1 + loss_a2) + (loss_e1 + loss_e2))
             
         loss_value = loss.item()
 
@@ -119,9 +128,16 @@ def evaluate(data_loader, model, device, dist_eval=False):
     targets = []
     vids = []
 
-    all_distance_preds = []
-    all_distances = []
-    doa_dists = []
+    # Source 1 metrics
+    all_distance_preds_1 = []
+    all_distances_1 = []
+    doa_dists_1 = []
+
+    # Source 2 metrics
+    all_distance_preds_2 = []
+    all_distances_2 = []
+    doa_dists_2 = []
+
     for batch in metric_logger.log_every(data_loader, 300, header):
 
         waveforms, reverbs = batch[0], batch[1]
@@ -139,16 +155,21 @@ def evaluate(data_loader, model, device, dist_eval=False):
             target = concat_all_gather(target)
         outputs.append(cls_output)
         targets.append(target)
-        all_distances.append(spaital_targets['distance'].numpy())
-        all_distance_preds.append(torch.argmax(output[1], dim=1).detach().cpu().numpy())
-        
-        az_pred = torch.argmax(output[2], dim=1).detach().cpu().numpy()
-        ele_pred = torch.argmax(output[3], dim=1).detach().cpu().numpy()
-        az_gt = spaital_targets['azimuth'].long().numpy()
-        ele_gt = spaital_targets['elevation'].long().numpy()
-        doa_dist = distance_between_spherical_coordinates_rad(az_gt, ele_gt, az_pred, ele_pred)
 
-        doa_dists.append(doa_dist)
+        #print(output[1].shape, output[2].shape, output[3].shape)
+        outputs_1 = output[1].view(-1, 21, 2)
+        outputs_2 = output[2].view(-1, 360, 2)
+        outputs_3 = output[3].view(-1, 180, 2)
+
+        all_distances_1.append(spaital_targets['distance'][:, 0].numpy())
+        all_distance_preds_1.append(torch.argmax(outputs_1[..., 0], dim=1).detach().cpu().numpy())
+        
+        az_pred = torch.argmax(outputs_2[..., 0], dim=1).detach().cpu().numpy()
+        ele_pred = torch.argmax(outputs_3[..., 0], dim=1).detach().cpu().numpy()
+        az_gt = spaital_targets['azimuth'][:, 0].long().numpy()
+        ele_gt = spaital_targets['elevation'][:, 0].long().numpy()
+        doa_dist = distance_between_spherical_coordinates_rad(az_gt, ele_gt, az_pred, ele_pred)
+        doa_dists_1.append(doa_dist)
 
     outputs = torch.cat(outputs).cpu().numpy()
     targets = torch.cat(targets).cpu().numpy()
@@ -160,18 +181,18 @@ def evaluate(data_loader, model, device, dist_eval=False):
     mAP = np.mean([stat['AP'] for stat in stats])
     print("mAP: {:.6f}".format(mAP))
 
-    all_distance_preds = np.concatenate(all_distance_preds)
-    all_distances = np.concatenate(all_distances)
-    doa_dists = np.concatenate(doa_dists)
+    all_distance_preds_1 = np.concatenate(all_distance_preds_1)
+    all_distances_1 = np.concatenate(all_distances_1)
+    doa_dists_1 = np.concatenate(doa_dists_1)
 
-    total_samples = len(all_distances)
+    total_samples = len(all_distances_1)
     spatial_outputs = []
 
-    distance_correct = np.sum([1 for truth, pred in zip(all_distances, all_distance_preds) if abs(truth - pred) <= 1])
+    distance_correct = np.sum([1 for truth, pred in zip(all_distances_1, all_distance_preds_1) if abs(truth - pred) <= 1])
     spatial_outputs.append(distance_correct)
 
     threshold = 20
-    doa_angular_error = np.sum(doa_dists)
+    doa_angular_error = np.sum(doa_dists_1)
     doa_error = np.sum(doa_dists > threshold) # 
     spatial_outputs.append(doa_error)
     spatial_outputs.append(doa_angular_error)
