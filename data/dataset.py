@@ -37,6 +37,7 @@ class DistributedSamplerWrapper(DistributedSampler):
         indices = indices[self.rank:self.total_size:self.num_replicas]
         return iter(indices)
         
+
 class DistributedWeightedSampler(Sampler):
     # dataset_train, samples_weight,  num_replicas=num_tasks, rank=global_rank
     def __init__(self, dataset, weights, num_replicas=None, rank=None, replacement=True, shuffle=True):
@@ -224,10 +225,10 @@ class MultichannelDataset(Dataset):
         waveform = torch.from_numpy(waveform.T).float()
 
         mix_lambda = np.random.beta(10, 10)
-        label_indices = np.zeros(self.label_num)  # initialize the label
+        label_indices = np.zeros(self.label_num * 2)  # initialize the label (*2 since we predict 2 classes now)
 
-        for label_str in datum['class']:
-            label_indices[self.index_dict[label_str]] = 1.0
+        for i, label_str in enumerate(datum['class']):
+            label_indices[self.index_dict[label_str] + i*self.label_num] = 1.0
 
         label_indices = torch.FloatTensor(label_indices)
         return waveform, None, label_indices, spaital_targets, audio_path, None

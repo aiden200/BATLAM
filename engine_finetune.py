@@ -61,12 +61,17 @@ def train_one_epoch(
         
         # with torch.cuda.amp.autocast():
         outputs = model(waveforms, reverbs, mask_t_prob=args.mask_t_prob, mask_f_prob=args.mask_f_prob)
-        
+       
+        outputs_0 = outputs[0].view(-1, 355, 2)
         outputs_1 = outputs[1].view(-1, 21, 2)
         outputs_2 = outputs[2].view(-1, 360, 2)
         outputs_3 = outputs[3].view(-1, 180, 2)
         
-        loss1 = criterion(outputs[0], targets)
+        targets_rs = targets.view(-1, 355, 2)
+
+        loss_t1 = criterion(outputs_0[..., 0], targets_rs[..., 0])
+        loss_t2 = criterion(outputs_0[..., 1], targets_rs[..., 1])
+        
         loss_d1 = F.cross_entropy(outputs_1[..., 0], distance[:, 0])
         loss_a1 = F.cross_entropy(outputs_2[..., 0], azimuth[:, 0])
         loss_e1 = F.cross_entropy(outputs_3[..., 0], elevation[:, 0])
@@ -77,7 +82,7 @@ def train_one_epoch(
 
 
         # loss = loss1
-        loss = 1250 * loss1 + 1 * (loss_d1 + loss_d2) + 2 * ((loss_a1 + loss_a2) + (loss_e1 + loss_e2))
+        loss = 1250 * (loss_t1 + 1 + loss_t2 + 1) * (loss_d1 + loss_d2) + 2 * ((loss_a1 + loss_a2) + (loss_e1 + loss_e2))
             
         loss_value = loss.item()
 
@@ -193,7 +198,7 @@ def evaluate(data_loader, model, device, dist_eval=False):
 
     threshold = 20
     doa_angular_error = np.sum(doa_dists_1)
-    doa_error = np.sum(doa_dists > threshold) # 
+    doa_error = np.sum(doa_dists_1 > threshold) # 
     spatial_outputs.append(doa_error)
     spatial_outputs.append(doa_angular_error)
 

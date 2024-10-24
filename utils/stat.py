@@ -45,7 +45,7 @@ def calculate_stats(output, target):
             target[:, k], output[:, k], average=None)
 
         # AUC
-        auc = metrics.roc_auc_score(target[:, k], output[:, k], average=None)
+        #auc = metrics.roc_auc_score(target[:, k], output[:, k], average=None)
 
         # Precisions, recalls
         (precisions, recalls, thresholds) = metrics.precision_recall_curve(
@@ -60,7 +60,7 @@ def calculate_stats(output, target):
                 'AP': avg_precision,
                 'fpr': fpr[0::save_every_steps],
                 'fnr': 1. - tpr[0::save_every_steps],
-                'auc': auc,
+                #'auc': auc,
                 # note acc is not class-wise, this is just to keep consistent with other metrics
                 'acc': acc
                 }
