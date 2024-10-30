@@ -192,7 +192,7 @@ class VisionTransformer(nn.Module):
         #self.repr_act = nn.Tanh()
 
         # Classifier head
-        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(embed_dim, num_classes * 2) if num_classes > 0 else nn.Identity() # predict two classes
 
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)

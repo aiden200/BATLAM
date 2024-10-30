@@ -5,6 +5,8 @@ import torch.nn as nn
 
 import torchaudio
 
+import soundfile as sf
+
 from timm.models.layers import to_2tuple, trunc_normal_
 
 from utils.stft import STFT, LogmelFilterBank
@@ -46,6 +48,43 @@ class PatchEmbed_new(nn.Module):
         x = x.flatten(2) # 32, 768, 101, 12 -> 32, 768, 1212
         x = x.transpose(1, 2) # 32, 768, 1212 -> 32, 1212, 768
         return x
+
+import importlib
+import os
+import numpy as np
+
+def load_checkpoint(checkpoint_path, device):
+    _, ext = os.path.splitext(os.path.basename(checkpoint_path))
+    assert ext in (".pth", ".tar"), "Only support ext and tar extensions of model checkpoint."
+    model_checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    if ext == ".pth":
+        print(f"Loading {checkpoint_path}.")
+        return model_checkpoint
+    else:  # tar
+        print(f"Loading {checkpoint_path}, epoch = {model_checkpoint['epoch']}.")
+        return model_checkpoint["model"]
+
+
+def initialize_config(module_cfg, pass_args=True):
+    """According to config items, load specific module dynamically with params.
+    e.g., Config items as follow：
+        module_cfg = {
+            "module": "model.model",
+            "main": "Model",
+            "args": {...}
+        }
+    1. Load the module corresponding to the "module" param.
+    2. Call function (or instantiate class) corresponding to the "main" param.
+    3. Send the param (in "args") into the function (or class) when calling ( or instantiating)
+    """
+    module = importlib.import_module(module_cfg["module"])
+
+    if pass_args:
+        return getattr(module, module_cfg["main"])(**module_cfg["args"])
+    else:
+        return getattr(module, module_cfg["main"])
+
 
 class SpatialAST(_VisionTransformer):
     """ Vision Transformer with support for global average pooling
@@ -111,14 +150,27 @@ class SpatialAST(_VisionTransformer):
         self.doa_norm = kwargs['norm_layer'](emb_dim)
         self.fc_norm = kwargs['norm_layer'](emb_dim)
 
-        self.distance_head = nn.Linear(emb_dim, 21) # [0:10:0.5], 21 classes 
-        self.azimuth_head = nn.Linear(emb_dim, 360)
-        self.elevation_head = nn.Linear(emb_dim, 180)
+        self.distance_head = nn.Linear(emb_dim, 21 * 2) # [0:10:0.5], 21 classes, Account for up to 2 active sound locations 
+        self.azimuth_head = nn.Linear(emb_dim, 360 * 2) # Account for up to 2 active sound locations
+        self.elevation_head = nn.Linear(emb_dim, 180 * 2) # Account for up to 2 active sound locations
 
         trunc_normal_(self.head.weight, std=2e-5)
         trunc_normal_(self.distance_head.weight, std=2e-5)
         trunc_normal_(self.azimuth_head.weight, std=2e-5)
         trunc_normal_(self.elevation_head.weight, std=2e-5)
+
+        model_config = {"model": {
+                        "module": "cdbpnproj",
+                        "main": "CDBPNProj",
+                        "args": {}
+        }}
+
+        #model_checkpoint_path = "/scratch/data/repos/LAM/train_all_spatial_scaper_4ch_wideband/checkpoints/model_0003.pth"
+        ##model_checkpoint_path = "/scratch/data/repos/LAM/kitchensink_eval_locata/checkpoints/model_0012.pth"
+        #device = 'cuda:0'
+        #self.lam_model = initialize_config(model_config['model'])
+        #self.lam_model.load_state_dict(load_checkpoint(model_checkpoint_path, device))
+        #self.lam_model.to(device)
 
     def random_masking_2d(self, x, mask_t_prob, mask_f_prob):
         N, L, D = x.shape  # batch, length, dim
@@ -175,7 +227,9 @@ class SpatialAST(_VisionTransformer):
     # overwrite original timm
     # need to edit this
     def forward(self, waveforms, reverbs, mask_t_prob=0.0, mask_f_prob=0.0):
-        waveforms = torchaudio.functional.fftconvolve(waveforms, reverbs, mode='full')[..., :waveforms.shape[-1]]
+        #waveforms = torchaudio.functional.fftconvolve(waveforms, reverbs*0.1258, mode='full')[..., :waveforms.shape[-1]]
+        # Call LAM encoder
+        #lam_tokens = self.lam_model(waveforms)
         B, C, T = waveforms.shape
 
         waveforms = waveforms.reshape(B * C, T)
